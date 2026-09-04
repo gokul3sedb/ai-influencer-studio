@@ -32,6 +32,7 @@ const ROUTES = {
   '/api/upload':   () => import('./api/upload.js'),
   '/api/generate': () => import('./api/generate.js'),
   '/api/status':   () => import('./api/status.js'),
+  '/api/health':   () => import('./api/health.js'),
 }
 
 async function readJsonBody(req) {
