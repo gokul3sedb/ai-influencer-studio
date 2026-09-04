@@ -1653,6 +1653,9 @@ export default function Create() {
   const [shakeContinue, setShakeContinue] = useState(false)
   const [ageErrorPulse, setAgeErrorPulse] = useState(false)
   const [hfConnected, setHfConnected] = useState(isHFConnected)
+  // Remembers that the user opted into kie.ai from the banner, so the prompt
+  // turns into a confirmation instead of nagging again on every step.
+  const [kiePicked, setKiePicked] = useState(() => localStorage.getItem(MODEL_PREF_KEY)?.startsWith('kie_'))
 
   function set(k, v) { setData(prev => ({ ...prev, [k]: v })) }
 
@@ -1811,6 +1814,54 @@ export default function Create() {
                 onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
               >Connect →</button>
             </div>
+          </div>
+        )}
+
+        {/* kie.ai — the alternative to connecting. Sits directly under the
+            Higgsfield banner so both engines are visible from step 1, not just
+            at the Generate step. Same card DNA, deliberately calmer: it is an
+            option, not a nag. Disappears once an engine is chosen. */}
+        {!hfConnected && step < 5 && !kiePicked && (
+          <div style={{
+            marginBottom: 32, marginTop: -18, borderRadius: 14,
+            border: '1.5px solid rgba(15,157,118,0.45)',
+            background: 'color-mix(in srgb, var(--bg) 94%, #0F9D76 6%)',
+            padding: '11px 14px',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+              background: 'rgba(15,157,118,0.14)', color: '#0F9D76',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 15, fontWeight: 800,
+            }}>k</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Or generate with kie.ai</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}>No login needed — same models</div>
+            </div>
+            <button onClick={() => {
+              localStorage.setItem(MODEL_PREF_KEY, 'kie_gpt_image_2')
+              setKiePicked(true)
+            }} style={{
+              flexShrink: 0, padding: '7px 14px', borderRadius: 8,
+              background: '#0F9D76', color: '#fff', fontSize: 12, fontWeight: 800,
+              border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'opacity 0.15s',
+            }}
+              onMouseEnter={e => { e.currentTarget.style.opacity = '0.85' }}
+              onMouseLeave={e => { e.currentTarget.style.opacity = '1' }}
+            >Use kie.ai →</button>
+          </div>
+        )}
+
+        {kiePicked && !hfConnected && step < 5 && (
+          <div style={{
+            marginBottom: 32, borderRadius: 14, padding: '11px 14px',
+            border: '1.5px solid rgba(15,157,118,0.45)',
+            background: 'color-mix(in srgb, var(--bg) 94%, #0F9D76 6%)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F9D76' }}>✓ Generating with kie.ai</div>
+            <div style={{ flex: 1, fontSize: 11.5, color: 'var(--text-tertiary)' }}>No Higgsfield connection needed. Change it at the Generate step.</div>
           </div>
         )}
 
