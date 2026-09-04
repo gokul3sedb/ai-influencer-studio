@@ -59,12 +59,28 @@ export default function Studio() {
   const [error, setError] = useState(null)
   const [saved, setSaved] = useState(null)
   const [tokenMissing, setTokenMissing] = useState(false)
+  const [tokenDraft, setTokenDraft] = useState('')
   const [hfReady, setHfReady] = useState(false)
 
   useEffect(() => {
     try { setTokenMissing(!localStorage.getItem('app_token')) } catch { setTokenMissing(true) }
     setHfReady(isHiggsfieldAvailable())
   }, [])
+
+  // Saved to this browser only, and read straight back so the banner clears
+  // without a reload. Replaced by a normal login once accounts exist.
+  function saveToken() {
+    const t = tokenDraft.trim()
+    if (!t) return
+    try {
+      localStorage.setItem('app_token', t)
+      setTokenMissing(false)
+      setTokenDraft('')
+      setError(null)
+    } catch {
+      setError('Could not save the key — your browser is blocking site storage.')
+    }
+  }
 
   const selected = useMemo(
     () => influencers.find(i => i.id === selectedId) || influencers[0] || null,
@@ -97,7 +113,14 @@ export default function Studio() {
       }, { onUpdate: setJobs })
       setUrls(out)
     } catch (e) {
-      setError(e.message)
+      // A rejected key is the one error the user can actually fix here, so
+      // reopen the key box rather than leaving them with a bare "Unauthorized".
+      if (/unauthori[sz]ed/i.test(e.message)) {
+        setTokenMissing(true)
+        setError('That access key was rejected. Check it and save again.')
+      } else {
+        setError(e.message)
+      }
     } finally {
       setBusy(false)
     }
@@ -148,12 +171,25 @@ export default function Studio() {
 
         {tokenMissing && (
           <div style={{ ...card, borderColor: '#F59E0B', background: 'rgba(245,158,11,0.08)' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Access token not set</div>
-            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              Open the browser console and run:<br />
-              <code style={{ display: 'inline-block', marginTop: 6, padding: '4px 8px', background: 'var(--bg-tertiary)', borderRadius: 6, fontSize: 12 }}>
-                localStorage.setItem('app_token', 'YOUR_APP_ACCESS_TOKEN')
-              </code>
+            <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>Access key needed</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 12 }}>
+              Paste your access key below and hit Save. You only do this once on this browser.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                style={{ ...input, flex: 1 }}
+                type="password"
+                placeholder="Paste access key"
+                value={tokenDraft}
+                onChange={e => setTokenDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') saveToken() }}
+              />
+              <button onClick={saveToken} disabled={!tokenDraft.trim()} style={{
+                padding: '0 22px', borderRadius: 10, border: 'none', fontFamily: 'inherit',
+                fontSize: 14, fontWeight: 700, cursor: tokenDraft.trim() ? 'pointer' : 'default',
+                background: tokenDraft.trim() ? '#F59E0B' : 'var(--bg-tertiary)',
+                color: tokenDraft.trim() ? '#fff' : 'var(--text-tertiary)',
+              }}>Save</button>
             </div>
           </div>
         )}
