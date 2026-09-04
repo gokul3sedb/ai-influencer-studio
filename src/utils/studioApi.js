@@ -88,14 +88,38 @@ function fingerprint(dataUrl) {
   return `${dataUrl.length}:${dataUrl.slice(0, 48)}:${dataUrl.slice(-24)}`
 }
 
-/** Upload one reference image (data URL) and return its hosted URL. Cached. */
-export async function uploadRef(dataUrl, { type = 'image' } = {}) {
-  if (!dataUrl) return null
-  if (/^https?:\/\//.test(dataUrl)) return dataUrl   // already hosted
+// A reference arrives in one of three shapes:
+//   data:…            an uploaded file
+//   https://…         a previous generation, or a remote image
+//   /camila/main.jpg  a seeded influencer's bundled path
+//
+// All three end up copied into the model's own store. Passing a foreign URL
+// through is what produced a stranger instead of the character: generation URLs
+// expire after 24 hours, and when the model cannot fetch the face it does not
+// fail — it generates from the text prompt alone.
+/** Upload one reference image and return a URL the model can actually read. */
+export async function uploadRef(src, { type = 'image' } = {}) {
+  if (!src) return null
 
-  const fp = fingerprint(dataUrl)
+  // Bundled seed images ("/camila/main.jpg") are same-origin, so the browser can
+  // read them; everything else remote is copied server-side, where there is no
+  // CORS wall. Either way the bytes end up in the model's own store rather than
+  // being referenced across the internet.
+  const absolute = src.startsWith('/') ? new URL(src, window.location.origin).href : src
+
+  const fp = fingerprint(absolute)
   const cache = readRefCache()
   if (cache[fp]) return cache[fp].url
+
+  if (!absolute.startsWith('data:')) {
+    const { url } = await postJson('/api/upload', { dataUrl: absolute, type })
+    const next = readRefCache()
+    next[fp] = { url, at: Date.now() }
+    writeRefCache(next)
+    return url
+  }
+
+  const dataUrl = absolute
 
   const { url } = await postJson('/api/upload', { dataUrl, type })
   cache[fp] = { url, at: Date.now() }
@@ -103,11 +127,26 @@ export async function uploadRef(dataUrl, { type = 'image' } = {}) {
   return url
 }
 
-/** Upload several refs in parallel, preserving order. Failures become null. */
-export async function uploadRefs(dataUrls = [], opts) {
+/**
+ * Upload several refs in parallel, preserving order.
+ *
+ * `required` decides what a failure means, and getting this wrong is expensive.
+ * A dropped face reference does not produce an error — it produces a picture of
+ * a different person, which looks like the model misbehaving rather than an
+ * upload that failed. So identity references throw, and only genuinely optional
+ * extras (props, style hints) are allowed to fall away with a warning.
+ */
+export async function uploadRefs(sources = [], { required = true, ...opts } = {}) {
+  const list = sources.filter(Boolean)
+  if (!list.length) return []
+
+  if (required) {
+    return Promise.all(list.map(s => uploadRef(s, opts)))
+  }
+
   const results = await Promise.all(
-    dataUrls.filter(Boolean).map(d => uploadRef(d, opts).catch(e => {
-      console.warn('[studio] ref upload failed:', e.message)
+    list.map(s => uploadRef(s, opts).catch(e => {
+      console.warn('[studio] optional ref skipped:', e.message)
       return null
     }))
   )

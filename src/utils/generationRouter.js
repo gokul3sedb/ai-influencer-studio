@@ -41,11 +41,18 @@ export const clearPendingPhoto = hf.clearPendingPhoto
 export const savePendingPhoto  = hf.savePendingPhoto
 export const generatePosePreviews = hf.generatePosePreviews
 
-// Reference images arrive as data URLs or as already-hosted URLs; uploadRefs
-// passes hosted ones straight through, so this is safe for both.
+// Identity references MUST land. If the face fails to upload the model does not
+// error, it invents a different person — so these throw rather than fall away.
 async function hostRefs(list) {
   const refs = list.filter(Boolean)
-  return refs.length ? uploadRefs(refs) : []
+  return refs.length ? uploadRefs(refs, { required: true }) : []
+}
+
+// Props and style hints genuinely are optional; losing one degrades the image
+// rather than changing who is in it.
+async function hostOptionalRefs(list) {
+  const refs = list.filter(Boolean)
+  return refs.length ? uploadRefs(refs, { required: false }) : []
 }
 
 // Shared server round-trip. Reports progress on the same 0-100 scale the
@@ -106,7 +113,9 @@ export async function generateNImages(opts) {
   const { prompt, count = 1, aspectRatio = '9:16', referenceImage, outfitImage,
           closeUpImage1, closeUpImage2, propImages = [], onProgress, onResult, isCancelled } = opts
   onProgress?.(10)
-  const refUrls = await hostRefs([referenceImage, outfitImage, closeUpImage1, closeUpImage2, ...propImages])
+  const identity = await hostRefs([referenceImage, outfitImage, closeUpImage1, closeUpImage2])
+  const props = await hostOptionalRefs(propImages)
+  const refUrls = [...identity, ...props]
   const urls = await runOnServer({
     jobType: 'scene_photo',
     prompt: Array.isArray(prompt) ? prompt : Array.from({ length: count }, () => prompt),
