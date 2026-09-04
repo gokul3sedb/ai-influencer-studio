@@ -40,6 +40,8 @@ export const getPendingPhoto   = hf.getPendingPhoto
 export const clearPendingPhoto = hf.clearPendingPhoto
 export const savePendingPhoto  = hf.savePendingPhoto
 export const generatePosePreviews = hf.generatePosePreviews
+export const hasPhotoGenSession  = hf.hasPhotoGenSession
+export const markPhotoGenSession = hf.markPhotoGenSession
 
 // Identity references MUST land. If the face fails to upload the model does not
 // error, it invents a different person — so these throw rather than fall away.

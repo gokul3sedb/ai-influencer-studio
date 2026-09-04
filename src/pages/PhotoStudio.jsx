@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { generateNImages, generatePosePreviews, generateSingleImage, savePendingPhoto, clearPendingPhoto, getPendingPhoto, pollAllJobs, hasPhotoGenSession } from '../utils/higgsfieldGenerate'
+import { generateNImages, generatePosePreviews, generateSingleImage, savePendingPhoto, clearPendingPhoto, getPendingPhoto, pollAllJobs, hasPhotoGenSession } from '../utils/generationRouter'
 import { isHFConnected } from '../utils/higgsfieldAuth'
 import { buildCharSheetPrompt, buildCharSheetPromptWithClaude } from '../utils/charSheetPrompt'
 import { useInfluencers, useBrandDeals } from '../store'
