@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { startHiggsfieldOAuthPopup, disconnectHF, isHFConnected } from '../utils/higgsfieldAuth'
 import { useTheme } from '../context/theme'
+import { setEngine, getEngines } from '../utils/generationRouter'
 
 function Section({ title, children }) {
   return (
@@ -21,6 +22,7 @@ export default function Settings() {
   const { theme, toggle } = useTheme()
   const [hfConnected, setHfConnected] = useState(isHFConnected)
   const [hfLoading, setHfLoading] = useState(false)
+  const [engines, setEngines] = useState(getEngines)
   const [claudeKey, setClaudeKey] = useState(() => localStorage.getItem(CLAUDE_KEY) || '')
   const [claudeInput, setClaudeInput] = useState('')
   const [showClaudeInput, setShowClaudeInput] = useState(false)
@@ -87,6 +89,55 @@ export default function Settings() {
               )
             })}
           </div>
+        </Section>
+
+        <Section title="Generation engine">
+          <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 18, lineHeight: 1.6 }}>
+            Photos and videos can run on different engines. Video costs roughly 30× an image, so it is worth choosing separately.
+          </p>
+
+          {[
+            { media: 'image', label: 'Photos', note: '~6 credits each' },
+            { media: 'video', label: 'Videos', note: '~205 credits per 5s' },
+          ].map(row => (
+            <div key={row.media} style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 12 }}>
+              <div style={{ width: 92, flexShrink: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>{row.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-tertiary)' }}>{row.note}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flex: 1 }}>
+                {[
+                  { id: 'higgsfield', label: 'Higgsfield', sub: 'Your credits' },
+                  { id: 'kie', label: 'kie.ai', sub: 'No login' },
+                ].map(opt => {
+                  const on = engines[row.media] === opt.id
+                  return (
+                    <button key={opt.id} onClick={() => {
+                      setEngine(row.media, opt.id)
+                      setEngines(getEngines())
+                    }} style={{
+                      flex: 1, padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
+                      textAlign: 'left', fontFamily: 'inherit',
+                      border: `1.5px solid ${on ? '#8B5CF6' : 'var(--border)'}`,
+                      background: on ? 'rgba(139,92,246,0.09)' : 'var(--bg)',
+                      transition: 'all 0.15s',
+                    }}>
+                      <div style={{ fontSize: 12.5, fontWeight: 700, color: on ? '#8B5CF6' : 'var(--text-primary)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-tertiary)' }}>{opt.sub}</div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+
+          {engines.image === 'higgsfield' || engines.video === 'higgsfield' ? (
+            !hfConnected && (
+              <div style={{ fontSize: 12, color: '#F59E0B', marginTop: 6 }}>
+                Higgsfield is selected above but not connected — connect it below, or switch that row to kie.ai.
+              </div>
+            )
+          ) : null}
         </Section>
 
         <Section title="Higgsfield">

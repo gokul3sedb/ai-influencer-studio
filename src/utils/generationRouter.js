@@ -16,14 +16,48 @@ import * as hf from './higgsfieldGenerate'
 import { startGeneration, pollJobs, uploadRefs } from './studioApi'
 
 const MODEL_PREF_KEY = 'aiis_model_pref'
+const ENGINE_PREF_KEY = 'aiis_engine_prefs'
 
-/** Which engine the user last chose. kie.ai ids are prefixed `kie_`. */
-export function currentEngine() {
+// Engines are chosen PER MEDIA TYPE, not globally, because the economics are
+// wildly different: an image is ~6 credits, a 5s video is ~205. The setup that
+// actually makes sense is cheap photos on kie.ai while video stays wherever it
+// looks best — a single switch cannot express that.
+export const MEDIA = { IMAGE: 'image', VIDEO: 'video' }
+
+function readPrefs() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(ENGINE_PREF_KEY) || '{}')
+    return (raw && typeof raw === 'object') ? raw : {}
+  } catch { return {} }
+}
+
+/**
+ * Which engine runs this media type.
+ *
+ * Falls back to the old single model preference so anyone who picked a kie.ai
+ * card in Create before this existed keeps the behaviour they already had,
+ * rather than silently reverting to Higgsfield and a surprise bill.
+ */
+export function currentEngine(media = MEDIA.IMAGE) {
+  const prefs = readPrefs()
+  if (prefs[media] === 'kie' || prefs[media] === 'higgsfield') return prefs[media]
+
   try { return (localStorage.getItem(MODEL_PREF_KEY) || '').startsWith('kie_') ? 'kie' : 'higgsfield' }
   catch { return 'higgsfield' }
 }
 
-const useServer = () => currentEngine() === 'kie'
+export function setEngine(media, engine) {
+  const prefs = readPrefs()
+  prefs[media] = engine
+  try { localStorage.setItem(ENGINE_PREF_KEY, JSON.stringify(prefs)) } catch {}
+  return prefs
+}
+
+export function getEngines() {
+  return { [MEDIA.IMAGE]: currentEngine(MEDIA.IMAGE), [MEDIA.VIDEO]: currentEngine(MEDIA.VIDEO) }
+}
+
+const useServer = (media = MEDIA.IMAGE) => currentEngine(media) === 'kie'
 
 // Pass-throughs — session and pending-job bookkeeping is Higgsfield-specific
 // and harmless to call either way.
@@ -132,7 +166,7 @@ export async function generateNImages(opts) {
 }
 
 export async function generateVideo(opts) {
-  if (!useServer()) return hf.generateVideo(opts)
+  if (!useServer(MEDIA.VIDEO)) return hf.generateVideo(opts)
 
   const { prompt, aspectRatio = '9:16', duration = 5, referenceImages = [], audioRef,
           startFrameUrl, resolution = '720p', onProgress, onPartialResults, isCancelled } = opts

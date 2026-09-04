@@ -7,6 +7,7 @@ import { analyzeBackstory } from '../utils/backstoryAnalysis'
 import { generateThreeImages } from '../utils/higgsfieldGenerate'
 import { isHFConnected, startHiggsfieldOAuthPopup } from '../utils/higgsfieldAuth'
 import { generate as generateViaServer, uploadRefs, hasAppToken, saveAppToken } from '../utils/studioApi'
+import { setEngine } from '../utils/generationRouter'
 import { compressImage } from '../utils/imageUtils'
 import { gColor } from '../utils/influencerUtils'
 
@@ -1263,6 +1264,9 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
     setModel(id)
     userModelRef.current = id
     localStorage.setItem(MODEL_PREF_KEY, id)
+    // Mirror the choice into the per-media preference so Settings and this
+    // picker never disagree about which engine photos run on.
+    setEngine('image', engineOf(id))
   }
   const gc = gColor(data.gender)
   const hasRef = !!(data.faceRef || data.styleRef)
@@ -1870,6 +1874,7 @@ export default function Create() {
             </div>
             <button onClick={() => {
               localStorage.setItem(MODEL_PREF_KEY, 'kie_gpt_image_2')
+              setEngine('image', 'kie')
               setKiePicked(true)
             }} style={{
               flexShrink: 0, padding: '7px 14px', borderRadius: 8,
