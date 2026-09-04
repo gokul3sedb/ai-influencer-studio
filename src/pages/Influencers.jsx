@@ -13,6 +13,7 @@ import { useTheme } from '../context/theme'
 import { isHFConnected } from '../utils/higgsfieldAuth'
 import { buildCharSheetPrompt, buildCharSheetPromptWithClaude } from '../utils/charSheetPrompt'
 import PhotoStudioPanel from './PhotoStudio'
+import EngineToggle from '../components/EngineToggle'
 import WardrobeDrawer from '../components/WardrobeDrawer'
 
 function useMobile() {
@@ -5479,6 +5480,12 @@ ${shotsWithBeats.join('\n\n')}`
             }
           </div>
         )}
+
+        {/* Engine picker — sits with the action row so the same inputs can be
+            run on either engine without leaving the screen. */}
+        <div style={{padding:'0 10px', display:'flex', justifyContent:'flex-end'}}>
+          <EngineToggle media="video" disabled={generating} />
+        </div>
 
         {/* Action row — [Random/Cancel] [Generate Video] [Save] [Inspect] */}
         <div style={{padding:'10px', display:'flex', gap:8, alignItems:'center'}}>

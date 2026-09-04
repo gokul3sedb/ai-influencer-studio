@@ -5,6 +5,7 @@ import { isHFConnected } from '../utils/higgsfieldAuth'
 import { buildCharSheetPrompt, buildCharSheetPromptWithClaude } from '../utils/charSheetPrompt'
 import { useInfluencers, useBrandDeals } from '../store'
 import WardrobeDrawer from '../components/WardrobeDrawer'
+import EngineToggle from '../components/EngineToggle'
 import {
   LOCATIONS, TIMES, EXPRESSIONS, PROP_SUGGESTIONS,
   getPoses, buildPhotoStudioPrompt, randomParams, getOutfitPresets,
@@ -1536,6 +1537,9 @@ export default function PhotoStudioPanel({ influencer, onGoToWardrobe, onUseAsSt
             transition: 'all 0.12s', fontFamily: 'inherit',
           }}>🎲 Random</button>
         )}
+        <div style={{ display: 'flex', alignItems: 'center', paddingRight: 4 }}>
+          <EngineToggle media="image" disabled={isActivelyGenerating} />
+        </div>
         <button
           onClick={generate}
           disabled={isActivelyGenerating || !influencer}
