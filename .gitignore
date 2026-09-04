@@ -4,3 +4,8 @@ dist
 *.local
 .claude/
 .git-old-fork-backup/
+
+.env
+.env.local
+.vercel
+test-output/

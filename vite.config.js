@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { studioApiPlugin } from './vite-dev-api.js'
 
 // Local dev search proxy — mirrors api/search.js for Vercel production
 const searchPlugin = {
@@ -101,7 +102,7 @@ const claudePlugin = {
 }
 
 export default defineConfig({
-  plugins: [react(), searchPlugin, imgProxyPlugin, claudePlugin],
+  plugins: [react(), searchPlugin, imgProxyPlugin, claudePlugin, studioApiPlugin],
   server: {
     proxy: {
       '/api/hf': {
