@@ -126,8 +126,13 @@ export const JOB_TYPES = {
  * Start a generation. Returns immediately with handles to poll.
  * @returns {Promise<{handles: string[], via: string, count: number}>}
  */
-export function startGeneration({ jobType, character, refUrls = [], firstFrameUrl = null, audioUrls = [], options = {} }) {
-  return postJson('/api/generate', { jobType, character, refUrls, firstFrameUrl, audioUrls, options })
+export function startGeneration({ jobType, character, refUrls = [], firstFrameUrl = null, audioUrls = [], options = {}, prompt = null }) {
+  // `prompt` is the migration escape hatch for flows whose prompt builders
+  // still live in the browser (see api/generate.js). Omit it and the server
+  // builds the prompt itself, which is the preferred path.
+  const body = { jobType, character, refUrls, firstFrameUrl, audioUrls, options }
+  if (prompt) body.prompt = prompt
+  return postJson('/api/generate', body)
 }
 
 /**

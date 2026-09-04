@@ -59,11 +59,29 @@ export default async function handler(req, res) {
   try { candidates = candidatesFor(jobType, options.provider || null) }
   catch (e) { return res.status(400).json({ error: e.message }) }
 
+  // MIGRATION ESCAPE HATCH — read this before extending it.
+  //
+  // Some flows (character sheet, close-ups, video) still build their prompt in
+  // the browser and pass it through. That is a deliberate step BACKWARDS on
+  // prompt privacy for those paths: a browser-supplied prompt is a
+  // browser-readable prompt.
+  //
+  // It exists so those pages can move onto the cheaper engine now instead of
+  // waiting for every prompt builder to be ported into lib/prompt/. Once they
+  // are, this branch should be deleted. Do not reach for it in new code.
+  const supplied = req.body?.prompt
   let prompts
-  try { prompts = buildPrompts(jobType, character, { ...options, count }) }
-  catch (e) {
-    console.error('[generate] prompt build failed:', e.message)
-    return res.status(400).json({ error: `Could not build prompt: ${e.message}` })
+  if (supplied) {
+    prompts = (Array.isArray(supplied) ? supplied : [supplied])
+      .filter(p => typeof p === 'string' && p.trim())
+      .slice(0, MAX_COUNT)
+    if (!prompts.length) return res.status(400).json({ error: 'Supplied prompt was empty' })
+  } else {
+    try { prompts = buildPrompts(jobType, character, { ...options, count }) }
+    catch (e) {
+      console.error('[generate] prompt build failed:', e.message)
+      return res.status(400).json({ error: `Could not build prompt: ${e.message}` })
+    }
   }
 
   // Walk the candidate list. A retryable failure (rate limit, 5xx, timeout)
