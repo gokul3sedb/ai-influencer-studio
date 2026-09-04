@@ -1541,8 +1541,37 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
         <div>
           <div style={{ padding: '16px 20px', borderRadius: 14, background: 'rgba(255,59,48,0.06)', border: '1.5px solid rgba(255,59,48,0.18)', marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 700, color: '#FF3B30', marginBottom: 5 }}>Generation failed</div>
-            <div style={{ fontSize: 13, color: '#FF6B6B', lineHeight: 1.5 }}>{genError}</div>
+            <div style={{ fontSize: 13, color: '#FF6B6B', lineHeight: 1.5 }}>
+              {/^unauthori[sz]ed$/i.test(genError || '')
+                ? 'Your access key is missing or wrong. Add it below and try again.'
+                : genError}
+            </div>
           </div>
+
+          {/* The fix has to live on the screen showing the problem. Without this,
+              "Unauthorized" is a dead end — the key field was only rendered
+              before generating, which is exactly where the user no longer is. */}
+          {/unauthori[sz]ed/i.test(genError || '') && (
+            <div style={{ padding: '14px 16px', borderRadius: 12, marginBottom: 16, border: '1.5px solid rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.07)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: L.text, marginBottom: 8 }}>Access key</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  value={appKey}
+                  onChange={e => setAppKey(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && saveAppToken(appKey)) { setNeedKey(false); setAppKey(''); generate() } }}
+                  placeholder="Paste access key"
+                  style={{ flex: 1, padding: '10px 12px', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${L.border}`, background: L.surface, color: L.text, outline: 'none' }}
+                />
+                <button
+                  onClick={() => { if (saveAppToken(appKey)) { setNeedKey(false); setAppKey(''); generate() } }}
+                  disabled={!appKey.trim()}
+                  style={{ padding: '0 18px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: appKey.trim() ? 'pointer' : 'default', background: appKey.trim() ? '#F59E0B' : L.border, color: appKey.trim() ? '#fff' : L.textFaint }}
+                >Save &amp; retry</button>
+              </div>
+            </div>
+          )}
+
           <button onClick={generate} style={{ width: '100%', padding: '14px', borderRadius: 12, fontSize: 14, fontWeight: 700, background: L.surfaceAlt, color: L.text, border: `1.5px solid ${L.border}`, cursor: 'pointer' }}>Try again →</button>
         </div>
       )}
