@@ -21,11 +21,29 @@ function appToken() {
   try { return localStorage.getItem('app_token') || '' } catch { return '' }
 }
 
+// Higgsfield spends the USER'S credits, so when they have connected their
+// account we forward that token with the request. It is read from the very
+// same localStorage key the existing Higgsfield client uses, so connecting in
+// Settings works for both paths and there is never a second login.
+function hfToken() {
+  try { return localStorage.getItem('hf_access_token') || '' } catch { return '' }
+}
+
+export function isHiggsfieldAvailable() { return !!hfToken() }
+
 function headers(extra = {}) {
   const h = { 'Content-Type': 'application/json', ...extra }
   const t = appToken()
   if (t) h['x-app-token'] = t
+  const hf = hfToken()
+  if (hf) h['x-hf-token'] = hf
   return h
+}
+
+export const PROVIDERS = {
+  AUTO:       null,          // cheapest-first, per lib/routing.js
+  KIE:        'kie',         // billed to the app's account
+  HIGGSFIELD: 'higgsfield',  // billed to the user's own Higgsfield credits
 }
 
 async function postJson(url, body) {

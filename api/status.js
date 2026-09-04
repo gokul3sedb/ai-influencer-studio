@@ -33,6 +33,8 @@ export default async function handler(req, res) {
     return res.status(429).json({ error: 'Too many requests — slow down a moment and try again.' })
   }
 
+  const userAuth = req.headers['x-hf-token'] || null
+
   const raw = req.query?.handles
     ?? (req.url ? new URLSearchParams(req.url.split('?')[1] || '').get('handles') : null)
 
@@ -48,7 +50,7 @@ export default async function handler(req, res) {
   const jobs = await Promise.all(handles.map(async handle => {
     try {
       const { provider, taskId } = decodeHandle(handle)
-      const state = await getProvider(provider).getJob(taskId)
+      const state = await getProvider(provider).getJob(taskId, { auth: userAuth })
       return { handle, ...state }
     } catch (e) {
       console.error('[status]', handle, e.message)

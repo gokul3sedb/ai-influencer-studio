@@ -51,8 +51,12 @@ export default async function handler(req, res) {
   // Cap fan-out so a malformed or hostile request can't launch 500 paid jobs.
   const count = Math.min(Math.max(1, Number(options.count) || 1), MAX_COUNT)
 
+  // Higgsfield spends the USER'S credits, so their OAuth token rides along on
+  // the request and is used, never stored. Absent for kie.ai, which uses ours.
+  const userAuth = req.headers['x-hf-token'] || null
+
   let candidates
-  try { candidates = candidatesFor(jobType) }
+  try { candidates = candidatesFor(jobType, options.provider || null) }
   catch (e) { return res.status(400).json({ error: e.message }) }
 
   let prompts
@@ -70,7 +74,7 @@ export default async function handler(req, res) {
   for (const candidate of candidates) {
     try {
       const model = modelFor(candidate, refUrls.length > 0)
-      const handles = await dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, audioUrls, options })
+      const handles = await dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, audioUrls, options, userAuth })
       return res.status(200).json({
         handles,
         jobType,
@@ -93,8 +97,11 @@ export default async function handler(req, res) {
   })
 }
 
-async function dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, audioUrls, options }) {
+async function dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, audioUrls, options, userAuth }) {
   const provider = getProvider(candidate.provider)
+  if (provider.requiresUserAuth && !userAuth) {
+    throw new Error(`${provider.name} needs your account connected — connect it in Settings, or pick another option`)
+  }
   // Client overrides apply to VIDEO only. Image models disagree about which
   // resolution values they accept (and some reject the field outright), so the
   // routing table is the sole authority there — a stray client value would be a
@@ -111,6 +118,7 @@ async function dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, aud
       audioUrls,
       aspectRatio: options.aspectRatio || '9:16',
       duration: clampDuration(options.duration),
+      auth: userAuth,
       ...params,
     })
     return [encodeHandle(provider.name, taskId)]
@@ -126,6 +134,7 @@ async function dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, aud
       prompt,
       refUrls,
       aspectRatio: options.aspectRatio || '9:16',
+      auth: userAuth,
       ...params,
     })
   ))
