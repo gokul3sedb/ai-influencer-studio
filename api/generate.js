@@ -3,6 +3,7 @@ import { checkAccess } from '../lib/auth.js'
 import { getProvider } from '../lib/providers/index.js'
 import { candidatesFor, modelFor } from '../lib/routing.js'
 import { buildPrompts } from '../lib/prompt/index.js'
+import { translatePrompts } from '../lib/prompt/translate.js'
 import { encodeHandle } from '../lib/jobs.js'
 import { ProviderError } from '../lib/providers/contract.js'
 
@@ -92,7 +93,16 @@ export default async function handler(req, res) {
   for (const candidate of candidates) {
     try {
       const model = modelFor(candidate, refUrls.length > 0)
-      const handles = await dispatch(candidate, model, prompts, { refUrls, firstFrameUrl, audioUrls, options, userAuth })
+      // Prompts are written in Higgsfield's dialect (@image1, @image2). Any
+      // other provider needs that addressing translated into plain language,
+      // or the per-reference instructions become noise and the character's
+      // identity drifts. Translated per candidate, since failover may cross
+      // providers.
+      const finalPrompts = translatePrompts(prompts, {
+        provider: candidate.provider,
+        refCount: refUrls.length + (firstFrameUrl ? 1 : 0),
+      })
+      const handles = await dispatch(candidate, model, finalPrompts, { refUrls, firstFrameUrl, audioUrls, options, userAuth })
       return res.status(200).json({
         handles,
         jobType,
