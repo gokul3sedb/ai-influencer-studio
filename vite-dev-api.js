@@ -1,9 +1,32 @@
+import fs from 'node:fs'
+import path from 'node:path'
+
 // Dev-server bridge for the server-side generation API.
 //
 // The older plugins in vite.config.js re-implement their Vercel handlers by
 // hand, which means dev and production can silently drift. This one imports
 // the REAL handler from api/ and adapts Node's req/res to the Express-ish
 // shape Vercel provides, so /api/generate behaves identically in both.
+
+// Vercel injects environment variables into process.env for you. Vite does NOT
+// — it only exposes VITE_-prefixed vars to *client* code via import.meta.env,
+// and server-side middleware like this never sees .env at all. Without this,
+// every generation in `npm run dev` fails with "KIE_API_KEY is not set" while
+// the same code works perfectly in production, which is a genuinely confusing
+// way to lose an afternoon.
+function loadDotEnv() {
+  const file = path.resolve(process.cwd(), '.env')
+  if (!fs.existsSync(file)) return
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i)
+    if (!m) continue
+    const [, key, rawValue] = m
+    // Never clobber a variable that was already set in the real shell.
+    if (process.env[key] !== undefined) continue
+    process.env[key] = rawValue.replace(/^["']|["']$/g, '')
+  }
+}
+loadDotEnv()
 
 const ROUTES = {
   '/api/upload':   () => import('./api/upload.js'),

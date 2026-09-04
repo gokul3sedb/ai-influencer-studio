@@ -328,7 +328,7 @@ export default function Studio() {
             {error && (
               <div style={{ ...card, marginTop: 16, borderColor: '#FF3B30', background: 'rgba(255,59,48,0.07)' }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#FF3B30', marginBottom: 4 }}>Generation failed</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{error}</div>
+                <div style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>{error}</div>
               </div>
             )}
 

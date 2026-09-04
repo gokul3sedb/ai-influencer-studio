@@ -49,8 +49,17 @@ export const PROVIDERS = {
 async function postJson(url, body) {
   const res = await fetch(url, { method: 'POST', headers: headers(), body: JSON.stringify(body) })
   const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`)
+  if (!res.ok) throw new Error(describeError(data, res.status))
   return data
+}
+
+// "All providers failed" on its own is useless — the reason each one failed is
+// in `details`, and dropping it means staring at a generic message with no idea
+// whether it's a missing key, an expired session or a bad model name.
+function describeError(data, status) {
+  const base = data?.error || `Request failed (${status})`
+  if (!Array.isArray(data?.details) || !data.details.length) return base
+  return `${base}\n\n${data.details.join('\n')}`
 }
 
 // ── Reference uploads ────────────────────────────────────────────
