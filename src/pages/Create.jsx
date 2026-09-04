@@ -6,6 +6,7 @@ import { buildThreeVariationPrompts } from '../utils/systemPrompt'
 import { analyzeBackstory } from '../utils/backstoryAnalysis'
 import { generateThreeImages } from '../utils/higgsfieldGenerate'
 import { isHFConnected, startHiggsfieldOAuthPopup } from '../utils/higgsfieldAuth'
+import { generate as generateViaServer, uploadRefs, hasAppToken, saveAppToken } from '../utils/studioApi'
 import { compressImage } from '../utils/imageUtils'
 import { gColor } from '../utils/influencerUtils'
 
@@ -28,13 +29,23 @@ const VIBE_OPTIONS = [
 ]
 const STEPS = ['Basics', 'References', 'Story', 'Look', 'Generate']
 
+// `engine` decides which backend runs the job, not which picture you get:
+//   'higgsfield' — the user's own Higgsfield login and credits (unchanged)
+//   'kie'        — our server-side stack, no login required
+// Same underlying models either way; only the route and who pays differ.
 const MODELS = [
-  { id: 'soul_2',            name: 'Higgsfield Soul', tag: 'Influencer-Native',   tagColor: '#EC4899', provider: 'higgsfield',              desc: 'Native model for fashion and UGC.',          maxRefs: 1 },
-  { id: 'gpt_image_2',       name: 'GPT Image 2',     tag: 'Max Quality',         tagColor: '#10B981', provider: 'openai',                  desc: 'Highest quality output, maximum realism.',   maxRefs: 2 },
-  { id: 'nano_banana_2',     name: 'Nano Banana Pro', tag: 'Sharpest Detail',     tagColor: '#8B5CF6', provider: 'banana', version: 'Pro', desc: 'Maximum detail and portrait precision.',     maxRefs: 2 },
-  { id: 'nano_banana_flash', name: 'Nano Banana 2',   tag: 'Fastest',             tagColor: '#0EA5E9', provider: 'banana', version: '2',   desc: 'Rapid results, still premium quality.',      maxRefs: 2 },
+  { id: 'soul_2',            name: 'Higgsfield Soul', tag: 'Influencer-Native',   tagColor: '#EC4899', provider: 'higgsfield',              engine: 'higgsfield', desc: 'Native model for fashion and UGC.',          maxRefs: 1 },
+  { id: 'gpt_image_2',       name: 'GPT Image 2',     tag: 'Max Quality',         tagColor: '#10B981', provider: 'openai',                  engine: 'higgsfield', desc: 'Highest quality output, maximum realism.',   maxRefs: 2 },
+  { id: 'nano_banana_2',     name: 'Nano Banana Pro', tag: 'Sharpest Detail',     tagColor: '#8B5CF6', provider: 'banana', version: 'Pro', engine: 'higgsfield', desc: 'Maximum detail and portrait precision.',     maxRefs: 2 },
+  { id: 'nano_banana_flash', name: 'Nano Banana 2',   tag: 'Fastest',             tagColor: '#0EA5E9', provider: 'banana', version: '2',   engine: 'higgsfield', desc: 'Rapid results, still premium quality.',      maxRefs: 2 },
+  { id: 'kie_gpt_image_2',   name: 'GPT Image 2',     tag: 'No Login',            tagColor: '#0F9D76', provider: 'openai',                  engine: 'kie',        desc: 'Same model, no Higgsfield needed.',          maxRefs: 2 },
+  { id: 'kie_nano_banana',   name: 'Nano Banana',     tag: 'No Login',            tagColor: '#0F9D76', provider: 'banana', version: '2',   engine: 'kie',        desc: 'Fast, no Higgsfield needed.',                maxRefs: 2 },
 ]
 const MODEL_PREF_KEY = 'aiis_model_pref'
+
+const engineOf = id => MODELS.find(m => m.id === id)?.engine || 'higgsfield'
+// Maps our card ids onto the job types the server route understands.
+const KIE_JOB = { kie_gpt_image_2: 'scene_photo', kie_nano_banana: 'fast_iteration' }
 
 // ── Physical description builder constants ─────────────────────
 const SKIN_TONES = [
@@ -1237,6 +1248,8 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
   const [selected, setSelected] = useState(null)
   const [lightboxUrl, setLightboxUrl] = useState(null)
   const [connectingHF, setConnectingHF] = useState(false)
+  const [appKey, setAppKey] = useState('')
+  const [needKey, setNeedKey] = useState(() => !hasAppToken())
   const [generatedPrompts, setGeneratedPrompts] = useState([])
   const [aspectRatio, setAspectRatio] = useState('9:16')
   const backstoryCtxRef = useRef(null)
@@ -1272,15 +1285,47 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
       backstoryCtxRef.current = backstoryContext
 
       const d = { ...data, physicalDesc, ...(backstoryContext ? { backstoryContext } : {}) }
-      const prompts = buildThreeVariationPrompts(d, aspectRatio, model)
-      setGeneratedPrompts(prompts)
-      const urls = await generateThreeImages({
-        prompts, aspectRatio, model,
-        faceRef: data.faceRef || null, styleRef: data.styleRef || null,
-        physicalDesc, faceRefNote: data.faceRefNote || '', styleRefNote: data.styleRefNote || '',
-        onProgress: setGenProgress,
-        onPartialResults: partial => setVariations(partial.slice(0, 3)),
-      })
+
+      let urls
+      if (engineOf(model) === 'kie') {
+        // Server-side engine. The three prompts are assembled on the server from
+        // the same wardrobe/archetype library, so nothing about the look changes —
+        // they simply never reach the browser.
+        setGenProgress(12)
+        const refUrls = await uploadRefs([data.faceRef, data.styleRef].filter(Boolean))
+        setGenProgress(25)
+
+        // Strip the base64 reference images out of the character payload. They
+        // are megabytes each and have already been uploaded above — leaving them
+        // in would blow the request size limit for no benefit.
+        const { faceRef, styleRef, ...characterForServer } = d
+
+        const out = await generateViaServer({
+          jobType: KIE_JOB[model] || 'scene_photo',
+          character: characterForServer,
+          refUrls,
+          options: { count: 3, aspectRatio, provider: 'kie' },
+        }, {
+          onUpdate: jobs => {
+            const ready = jobs.flatMap(j => j.urls || [])
+            if (ready.length) setVariations(ready.slice(0, 3))
+            const done = jobs.filter(j => j.state === 'succeeded').length
+            setGenProgress(25 + Math.round((done / Math.max(jobs.length, 1)) * 70))
+          },
+        })
+        urls = out.urls
+      } else {
+        const prompts = buildThreeVariationPrompts(d, aspectRatio, model)
+        setGeneratedPrompts(prompts)
+        urls = await generateThreeImages({
+          prompts, aspectRatio, model,
+          faceRef: data.faceRef || null, styleRef: data.styleRef || null,
+          physicalDesc, faceRefNote: data.faceRefNote || '', styleRefNote: data.styleRefNote || '',
+          onProgress: setGenProgress,
+          onPartialResults: partial => setVariations(partial.slice(0, 3)),
+        })
+      }
+
       setVariations(urls.slice(0, 3))
       setSelected(0)
       setPhase('done')
@@ -1303,12 +1348,30 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
     }
   }
 
-  if (!hfConnected) {
+  // Only Higgsfield needs a connection. If the chosen engine is kie.ai this gate
+  // is skipped entirely — that is the whole point of offering a second engine.
+  if (!hfConnected && engineOf(model) === 'higgsfield') {
     return (
       <div>
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 32, fontWeight: 800, letterSpacing: '-1px', color: L.text, marginBottom: 8 }}>Connect Higgsfield to generate</h2>
+          <p style={{ fontSize: 15, color: L.textSub, lineHeight: 1.55 }}>
+            Or switch to an engine that doesn't need a login — same models, same result.
+          </p>
         </div>
+
+        <button
+          onClick={() => pickModel('kie_gpt_image_2')}
+          style={{
+            width: '100%', padding: '16px 20px', borderRadius: 14, marginBottom: 16,
+            border: '1.5px solid #0F9D76', background: 'rgba(15,157,118,0.07)',
+            cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit',
+          }}
+        >
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#0F9D76', marginBottom: 3 }}>Generate without connecting →</div>
+          <div style={{ fontSize: 13, color: L.textSub }}>Uses GPT Image 2 on our account. No Higgsfield login needed.</div>
+        </button>
+
         <div style={{ background: 'rgba(201,255,0,0.06)', border: '1.5px solid rgba(201,255,0,0.35)', borderRadius: 18, padding: '24px' }}>
           <button
             onClick={doConnect}
@@ -1385,6 +1448,29 @@ function Step5({ data, onFinish, onReset, hfConnected, onConnected }) {
               )
             })}
           </div>
+
+          {/* Access key — only for the server-side engine, only until it's saved.
+              Higgsfield users never see this. */}
+          {engineOf(model) === 'kie' && needKey && (
+            <div style={{ padding: '14px 16px', borderRadius: 12, marginBottom: 20, border: '1.5px solid rgba(245,158,11,0.45)', background: 'rgba(245,158,11,0.07)' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 700, color: L.text, marginBottom: 8 }}>Access key needed once</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="password"
+                  value={appKey}
+                  onChange={e => setAppKey(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && saveAppToken(appKey)) { setNeedKey(false); setAppKey('') } }}
+                  placeholder="Paste access key"
+                  style={{ flex: 1, padding: '10px 12px', borderRadius: 9, fontSize: 13, fontFamily: 'inherit', border: `1.5px solid ${L.border}`, background: L.surface, color: L.text, outline: 'none' }}
+                />
+                <button
+                  onClick={() => { if (saveAppToken(appKey)) { setNeedKey(false); setAppKey('') } }}
+                  disabled={!appKey.trim()}
+                  style={{ padding: '0 18px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', cursor: appKey.trim() ? 'pointer' : 'default', background: appKey.trim() ? '#F59E0B' : L.border, color: appKey.trim() ? '#fff' : L.textFaint }}
+                >Save</button>
+              </div>
+            </div>
+          )}
 
           {/* Aspect ratio — secondary, compact */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>

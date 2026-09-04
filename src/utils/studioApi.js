@@ -15,10 +15,16 @@ const REF_CACHE_KEY = 'studio_ref_cache'
 const REF_TTL_MS = 20 * 60 * 60 * 1000
 
 function appToken() {
-  // Set in the browser console during development:
-  //   localStorage.setItem('app_token', '<APP_ACCESS_TOKEN>')
-  // Replaced by a real session cookie once accounts exist.
   try { return localStorage.getItem('app_token') || '' } catch { return '' }
+}
+
+/** Whether this browser holds an access key for the server-side engine. */
+export function hasAppToken() { return !!appToken() }
+
+export function saveAppToken(value) {
+  const t = String(value || '').trim()
+  if (!t) return false
+  try { localStorage.setItem('app_token', t); return true } catch { return false }
 }
 
 // Higgsfield spends the USER'S credits, so when they have connected their
