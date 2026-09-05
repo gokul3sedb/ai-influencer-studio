@@ -109,6 +109,7 @@ export default function Settings() {
                 {[
                   { id: 'higgsfield', label: 'Higgsfield', sub: 'Your credits' },
                   { id: 'kie', label: 'kie.ai', sub: 'No login' },
+                  { id: 'apimart', label: 'APIMart', sub: 'Unverified' },
                 ].map(opt => {
                   const on = engines[row.media] === opt.id
                   return (

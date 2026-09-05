@@ -19,7 +19,14 @@ import { setEngine, getEngines } from '../utils/generationRouter'
 const OPTIONS = [
   { id: 'higgsfield', label: 'Higgsfield' },
   { id: 'kie',        label: 'kie.ai' },
+  { id: 'apimart',    label: 'APIMart' },
 ]
+
+const HINTS = {
+  higgsfield: 'Runs on your own Higgsfield credits',
+  kie:        'Runs on the app account — no login needed',
+  apimart:    'Runs on the app account — unverified, test before relying on it',
+}
 
 export default function EngineToggle({ media = 'image', disabled = false, onChange }) {
   const [engine, setLocal] = useState(() => getEngines()[media])
@@ -52,9 +59,9 @@ export default function EngineToggle({ media = 'image', disabled = false, onChan
               key={opt.id}
               onClick={() => pick(opt.id)}
               disabled={disabled}
-              title={opt.id === 'kie' ? 'Runs on the app account — no Higgsfield login needed' : 'Runs on your own Higgsfield credits'}
+              title={HINTS[opt.id]}
               style={{
-                padding: '5px 12px', borderRadius: 7, border: 'none',
+                padding: '5px 10px', borderRadius: 7, border: 'none',
                 fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
                 cursor: disabled ? 'default' : 'pointer',
                 background: on ? 'var(--surface)' : 'transparent',
