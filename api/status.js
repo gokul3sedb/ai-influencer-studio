@@ -3,6 +3,7 @@ import { checkAccess } from '../lib/auth.js'
 import { getProvider } from '../lib/providers/index.js'
 import { decodeHandle } from '../lib/jobs.js'
 import { STATE } from '../lib/providers/contract.js'
+import { persistAll, storageConfigured } from '../lib/storage.js'
 
 // GET /api/status?handles=kie:abc,kie:def
 //   -> { jobs: [{ handle, state, urls, progress, error }], done: bool }
@@ -51,6 +52,16 @@ export default async function handler(req, res) {
     try {
       const { provider, taskId } = decodeHandle(handle)
       const state = await getProvider(provider).getJob(taskId, { auth: userAuth })
+
+      // Copy finished media into our own bucket before handing back the URL.
+      // Provider URLs expire after 24 hours and the app stores them in the
+      // browser, so without this a profile silently fills with broken images.
+      // Done at the moment of success because the client stops polling once a
+      // job is done — so each result is copied about once.
+      if (state.state === STATE.SUCCEEDED && state.urls?.length && storageConfigured()) {
+        state.urls = await persistAll(state.urls, { prefix: `${provider}/${jobPrefix(taskId)}` })
+      }
+
       return { handle, ...state }
     } catch (e) {
       console.error('[status]', handle, e.message)
@@ -60,5 +71,11 @@ export default async function handler(req, res) {
 
   const done = jobs.every(j => j.state === STATE.SUCCEEDED || j.state === STATE.FAILED)
 
-  return res.status(200).json({ jobs, done })
+  return res.status(200).json({ jobs, done, stored: storageConfigured() })
+}
+
+// Groups a day's output together in the bucket, which makes both browsing and
+// any future cleanup job far easier than a flat directory of millions of files.
+function jobPrefix() {
+  return new Date().toISOString().slice(0, 10)
 }
