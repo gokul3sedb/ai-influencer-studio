@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { setEngine, getEngines } from '../utils/generationRouter'
+import { isHFConnected } from '../utils/higgsfieldAuth'
 
 // ── Inline engine toggle ─────────────────────────────────────────
 //
@@ -30,6 +31,13 @@ const HINTS = {
 
 export default function EngineToggle({ media = 'image', disabled = false, onChange }) {
   const [engine, setLocal] = useState(() => getEngines()[media])
+  const [hfReady] = useState(isHFConnected)
+
+  // Higgsfield spends the user's OWN credits, so it only works once they have
+  // connected. Selecting it while disconnected used to look like a broken
+  // generator — the request simply failed at the token step with no hint that
+  // a connection was the missing piece. Say so at the point of choosing.
+  const needsConnect = id => id === 'higgsfield' && !hfReady
 
   function pick(id) {
     if (disabled || id === engine) return
@@ -59,20 +67,26 @@ export default function EngineToggle({ media = 'image', disabled = false, onChan
               key={opt.id}
               onClick={() => pick(opt.id)}
               disabled={disabled}
-              title={HINTS[opt.id]}
+              title={needsConnect(opt.id) ? 'Not connected — connect Higgsfield in Settings first' : HINTS[opt.id]}
               style={{
                 padding: '5px 10px', borderRadius: 7, border: 'none',
                 fontFamily: 'inherit', fontSize: 11.5, fontWeight: 700,
                 cursor: disabled ? 'default' : 'pointer',
                 background: on ? 'var(--surface)' : 'transparent',
-                color: on ? '#8B5CF6' : 'var(--text-tertiary)',
+                color: on ? (needsConnect(opt.id) ? '#F59E0B' : '#8B5CF6') : 'var(--text-tertiary)',
                 boxShadow: on ? '0 1px 3px rgba(0,0,0,0.12)' : 'none',
                 transition: 'all 0.14s',
               }}
-            >{opt.label}</button>
+            >{opt.label}{needsConnect(opt.id) ? ' ⚠' : ''}</button>
           )
         })}
       </div>
+
+      {needsConnect(engine) && (
+        <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 600 }}>
+          Not connected — connect in Settings, or pick another engine
+        </span>
+      )}
     </div>
   )
 }
