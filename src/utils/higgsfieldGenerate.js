@@ -828,7 +828,13 @@ export async function generateSingleImage({ prompt, aspectRatio = '16:9', resolu
       faceUploaded = true
       onProgress?.(12)
     } catch (e) {
-      console.warn('[HF] reference upload failed, generating without it:', e.message)
+      // "generating without it" meant generating a different person. The
+      // identity reference is the whole point of the request, and the prompt
+      // still tells the model to match @image1 — which no longer exists.
+      throw new Error(
+        `Could not upload the face reference to Higgsfield (${e.message}). ` +
+        `Stopped rather than generate without it — the result would have been a different person.`
+      )
     }
   }
 
@@ -839,7 +845,12 @@ export async function generateSingleImage({ prompt, aspectRatio = '16:9', resolu
       outfitUploaded = true
       onProgress?.(18)
     } catch (e) {
-      console.warn('[HF] outfit reference upload failed:', e.message)
+      // Losing this shifts @image2 onto whatever came next, so the outfit
+      // instruction starts describing the wrong picture.
+      throw new Error(
+        `Could not upload the outfit reference to Higgsfield (${e.message}). ` +
+        `Stopped rather than generate with the wrong reference.`
+      )
     }
   }
 
@@ -890,16 +901,27 @@ export async function generateNImages({ prompt, count = 1, aspectRatio = '9:16',
     ...propImages.map((img, i) => ({ img, label: `prop${i + 1}` })),
   ].filter(e => e.img)
 
-  const uploaded = await Promise.all(refEntries.map(async ({ img, label }) => {
-    try {
-      const value = await uploadRefImage(img)
-      return { value, role: 'image' }
-    } catch (e) {
-      console.warn(`[HF] ${label} upload failed:`, e.message)
-      return null
-    }
-  }))
-  uploaded.filter(Boolean).forEach(m => medias.push(m))
+  // A failed reference upload USED to be dropped here with a console warning.
+  // That silently compacted the list, so every @image tag after the missing one
+  // shifted: "@image1 is the person" landed on the outfit, or on nothing, and
+  // the model generated a stranger. It read as the generator misbehaving rather
+  // than an upload that failed.
+  //
+  // Now it stops and names the reference. An error you can act on beats a wrong
+  // photo you cannot detect.
+  const results = await Promise.allSettled(refEntries.map(e => uploadRefImage(e.img)))
+  const lost = results
+    .map((r, i) => r.status === 'rejected' ? { label: refEntries[i].label, reason: r.reason?.message } : null)
+    .filter(Boolean)
+
+  if (lost.length) {
+    throw new Error(
+      `Could not upload reference ${lost.map(l => l.label).join(', ')} to Higgsfield ` +
+      `(${lost[0].reason || 'unknown error'}). Stopped rather than generate without it — ` +
+      `the result would have been a different person.`
+    )
+  }
+  results.forEach(r => medias.push({ value: r.value, role: 'image' }))
   onProgress?.(18)
 
   const baseParams = { ...modelBaseParams('gpt_image_2', aspectRatio), resolution }
