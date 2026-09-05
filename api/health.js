@@ -20,6 +20,8 @@ export default function handler(req, res) {
       KIE_API_KEY: check('KIE_API_KEY'),
       APP_ACCESS_TOKEN: check('APP_ACCESS_TOKEN'),
       BLOB_READ_WRITE_TOKEN: check('BLOB_READ_WRITE_TOKEN'),
+      BLOB_STORE_ID: check('BLOB_STORE_ID'),
+      VERCEL_OIDC_TOKEN: check('VERCEL_OIDC_TOKEN'),
     },
     // Which commit is actually running — catches a redeploy that silently
     // rebuilt an older commit.
