@@ -77,18 +77,15 @@ export const generatePosePreviews = hf.generatePosePreviews
 export const hasPhotoGenSession  = hf.hasPhotoGenSession
 export const markPhotoGenSession = hf.markPhotoGenSession
 
-// Identity references MUST land. If the face fails to upload the model does not
-// error, it invents a different person — so these throw rather than fall away.
-async function hostRefs(list) {
-  const refs = list.filter(Boolean)
-  return refs.length ? uploadRefs(refs, { required: true }) : []
-}
-
-// Props and style hints genuinely are optional; losing one degrades the image
-// rather than changing who is in it.
-async function hostOptionalRefs(list) {
-  const refs = list.filter(Boolean)
-  return refs.length ? uploadRefs(refs, { required: false }) : []
+// Every reference must land, props included. The prompt addresses images by
+// POSITION, so a dropped upload shifts everything after it and the prompt ends
+// up describing the wrong picture — silently. `labels` let the error name the
+// image that failed instead of a bare index.
+async function hostRefs(list, labels = []) {
+  const kept = []
+  const keptLabels = []
+  list.forEach((img, i) => { if (img) { kept.push(img); keptLabels.push(labels[i]) } })
+  return kept.length ? uploadRefs(kept, { labels: keptLabels }) : []
 }
 
 // Shared server round-trip. Reports progress on the same 0-100 scale the
@@ -121,7 +118,7 @@ export async function generateSingleImage(opts) {
 
   const { prompt, aspectRatio = '9:16', referenceImage, outfitImage, onProgress, isCancelled } = opts
   onProgress?.(10)
-  const refUrls = await hostRefs([referenceImage, outfitImage])
+  const refUrls = await hostRefs([referenceImage, outfitImage], ['the face reference', 'the outfit reference'])
   const urls = await runOnServer({
     jobType: 'scene_photo', prompt, refUrls,
     options: { count: 1, aspectRatio, provider: 'kie' },
@@ -135,7 +132,7 @@ export async function generateThreeImages(opts) {
 
   const { prompts, aspectRatio = '9:16', faceRef, styleRef, onProgress, onPartialResults, isCancelled } = opts
   onProgress?.(10)
-  const refUrls = await hostRefs([faceRef, styleRef])
+  const refUrls = await hostRefs([faceRef, styleRef], ['the face reference', 'the style reference'])
   return runOnServer({
     jobType: 'scene_photo', prompt: prompts, refUrls,
     options: { count: Array.isArray(prompts) ? prompts.length : 3, aspectRatio, provider: 'kie' },
@@ -149,9 +146,13 @@ export async function generateNImages(opts) {
   const { prompt, count = 1, aspectRatio = '9:16', referenceImage, outfitImage,
           closeUpImage1, closeUpImage2, propImages = [], onProgress, onResult, isCancelled } = opts
   onProgress?.(10)
-  const identity = await hostRefs([referenceImage, outfitImage, closeUpImage1, closeUpImage2])
-  const props = await hostOptionalRefs(propImages)
-  const refUrls = [...identity, ...props]
+  // One call, one order: identity first then props, exactly matching how the
+  // caller numbered the @image tags in the prompt.
+  const refUrls = await hostRefs(
+    [referenceImage, outfitImage, closeUpImage1, closeUpImage2, ...propImages],
+    ['the face reference', 'the outfit reference', 'the close-up reference', 'the second close-up',
+     ...propImages.map((_, i) => `prop image ${i + 1}`)],
+  )
   const urls = await runOnServer({
     jobType: 'scene_photo',
     prompt: Array.isArray(prompt) ? prompt : Array.from({ length: count }, () => prompt),
@@ -172,9 +173,9 @@ export async function generateVideo(opts) {
           startFrameUrl, resolution = '720p', onProgress, onPartialResults, isCancelled } = opts
   onProgress?.(10)
 
-  const refUrls = await hostRefs(referenceImages)
-  const [firstFrameUrl] = startFrameUrl ? await hostRefs([startFrameUrl]) : []
-  const audioUrls = audioRef ? await hostRefs([audioRef]) : []
+  const refUrls = await hostRefs(referenceImages, referenceImages.map((_, i) => `reference image ${i + 1}`))
+  const [firstFrameUrl] = startFrameUrl ? await hostRefs([startFrameUrl], ['the start frame']) : []
+  const audioUrls = audioRef ? await hostRefs([audioRef], ['the audio file']) : []
 
   const { handles } = await startGeneration({
     jobType: 'video', character: {}, prompt, refUrls, firstFrameUrl: firstFrameUrl || null, audioUrls,

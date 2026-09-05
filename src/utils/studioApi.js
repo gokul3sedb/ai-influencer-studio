@@ -130,27 +130,41 @@ export async function uploadRef(src, { type = 'image' } = {}) {
 /**
  * Upload several refs in parallel, preserving order.
  *
- * `required` decides what a failure means, and getting this wrong is expensive.
- * A dropped face reference does not produce an error — it produces a picture of
- * a different person, which looks like the model misbehaving rather than an
- * upload that failed. So identity references throw, and only genuinely optional
- * extras (props, style hints) are allowed to fall away with a warning.
+ * EVERY reference is required, including "optional" ones like props, and that
+ * is deliberate.
+ *
+ * The prompt addresses images BY POSITION — "the second reference image is the
+ * outfit". Dropping a failed upload compacts the list, so every image after it
+ * shifts down one and the prompt starts describing the wrong picture: the
+ * outfit instruction lands on a close-up, the person comes out in the wrong
+ * clothes, and nothing reports an error.
+ *
+ * A prop being decorative does not make its POSITION optional. So a failure
+ * fails the generation with a message naming the image, which the user can act
+ * on — instead of silently producing a subtly wrong photo, which they cannot.
+ *
+ * `labels` names each slot so the error says "outfit reference" rather than
+ * "reference 2".
  */
-export async function uploadRefs(sources = [], { required = true, ...opts } = {}) {
+export async function uploadRefs(sources = [], { labels = [], ...opts } = {}) {
   const list = sources.filter(Boolean)
   if (!list.length) return []
 
-  if (required) {
-    return Promise.all(list.map(s => uploadRef(s, opts)))
+  const results = await Promise.allSettled(list.map(s => uploadRef(s, opts)))
+
+  const failed = results
+    .map((r, i) => r.status === 'rejected' ? (labels[i] || `reference ${i + 1}`) : null)
+    .filter(Boolean)
+
+  if (failed.length) {
+    throw new Error(
+      `Could not upload ${failed.join(' and ')}. ` +
+      `Generation stopped rather than continue without ${failed.length > 1 ? 'them' : 'it'} — ` +
+      `the result would have used the wrong image. Please try again.`
+    )
   }
 
-  const results = await Promise.all(
-    list.map(s => uploadRef(s, opts).catch(e => {
-      console.warn('[studio] optional ref skipped:', e.message)
-      return null
-    }))
-  )
-  return results.filter(Boolean)
+  return results.map(r => r.value)
 }
 
 // ── Generation ───────────────────────────────────────────────────
