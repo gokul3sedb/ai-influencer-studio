@@ -468,34 +468,42 @@ export async function generateVideo({ prompt, aspectRatio = '9:16', duration = 8
   // start_image first (if any), then @image_N reference images, then audio
   const medias = []
 
+  // Every one of these used to be caught and skipped with a console warning.
+  // The block below even says "order preserved for correct @image_N mapping"
+  // while filter(Boolean) silently broke exactly that: lose one reference and
+  // every tag after it shifts, so the prompt describes the wrong picture and
+  // the character comes out as someone else.
   if (startFrameUrl) {
     try {
-      const id = await uploadRefImage(startFrameUrl)
-      medias.push({ value: id, role: 'start_image' })
+      medias.push({ value: await uploadRefImage(startFrameUrl), role: 'start_image' })
     } catch (e) {
-      console.warn('[HF] start frame upload failed, skipping:', e.message)
+      throw new Error(`Could not upload the start frame to Higgsfield (${e.message}). Stopped rather than start the video from the wrong image.`)
     }
   }
 
   // Upload all reference images in parallel — order preserved for correct @image_N mapping
-  const imageMedias = (await Promise.all(
-    referenceImages.filter(Boolean).map(async imgDataUrl => {
-      try {
-        return { value: await uploadRefImage(imgDataUrl), role: 'image' }
-      } catch (e) {
-        console.warn('[HF] video ref upload failed, skipping:', e.message)
-        return null
-      }
-    })
-  )).filter(Boolean)
-  medias.push(...imageMedias)
+  const refs = referenceImages.filter(Boolean)
+  const refResults = await Promise.allSettled(refs.map(img => uploadRefImage(img)))
+  const lostRefs = refResults
+    .map((r, i) => r.status === 'rejected' ? { i: i + 1, reason: r.reason?.message } : null)
+    .filter(Boolean)
+
+  if (lostRefs.length) {
+    throw new Error(
+      `Could not upload reference image ${lostRefs.map(l => l.i).join(', ')} to Higgsfield ` +
+      `(${lostRefs[0].reason || 'unknown error'}). Stopped rather than generate without it — ` +
+      `the character would have come out as a different person.`
+    )
+  }
+  refResults.forEach(r => medias.push({ value: r.value, role: 'image' }))
 
   if (audioRef) {
     try {
-      const audioId = await uploadAudioFile(audioRef)
-      medias.push({ value: audioId, role: 'audio' })
+      medias.push({ value: await uploadAudioFile(audioRef), role: 'audio' })
     } catch (e) {
-      console.warn('[HF] audio upload failed, skipping:', e.message)
+      // Skipping this produced a silent video with no lip sync, which the user
+      // only discovers on playback and cannot explain.
+      throw new Error(`Could not upload the audio to Higgsfield (${e.message}). Stopped rather than generate a video with no voice.`)
     }
   }
 
