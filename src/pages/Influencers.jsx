@@ -423,6 +423,9 @@ function CharacterSheetSlot({ influencer, onSave, onLightbox }) {
         prompt, aspectRatio: ar, referenceImage: influencer.mainImage, onProgress: () => {},
         pendingKey: { influencerId: influencer.id, slot: 'characterSheetImage' },
         isCancelled: () => cancelRef.current,
+        // Lets the server build the prompt instead, so the text never ships to
+        // the browser. Ignored on the Higgsfield path, which uses `prompt`.
+        serverJobType: 'character_sheet', character: influencer,
       })
       if (cancelRef.current) return
       if (url) {
@@ -568,7 +571,7 @@ function CharacterSheetSlot({ influencer, onSave, onLightbox }) {
 
 // ─────────────────────────────────────────────
 // Close-up slot with inline generation
-function CloseUpSlot({ influencer, imageKey, label, onSave, onLightbox, promptFn = buildCloseUpPrompt, genAspectRatio = '4:5', fit = 'cover' }) {
+function CloseUpSlot({ influencer, imageKey, label, onSave, onLightbox, promptFn = buildCloseUpPrompt, serverJobType = 'close_up', genAspectRatio = '4:5', fit = 'cover' }) {
   const [loading, setLoading] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const [err, setErr] = useState(null)
@@ -627,6 +630,7 @@ function CloseUpSlot({ influencer, imageKey, label, onSave, onLightbox, promptFn
         onProgress: () => {},
         pendingKey: { influencerId: influencer.id, slot: imageKey },
         isCancelled: () => cancelRef.current,
+        serverJobType, character: influencer,
       })
       if (cancelRef.current) return
       if (url) {
@@ -6303,6 +6307,7 @@ export default function Influencers() {
                     onSave={v=>{upd(influencer.id,{closeUpImage2:v});if(v)addToHistory(influencer.id,{type:'image',label:'Feature Sheet',url:v,date:Date.now()})}}
                     onLightbox={()=>setLightbox({images:topImages,index:topImages.indexOf(influencer.closeUpImage2)})}
                     promptFn={buildFeatureSheetPrompt}
+                    serverJobType="feature_sheet"
                     genAspectRatio="2:3"
                     fit="contain"
                   />

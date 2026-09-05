@@ -90,8 +90,8 @@ async function hostRefs(list, labels = []) {
 
 // Shared server round-trip. Reports progress on the same 0-100 scale the
 // Higgsfield path uses so existing progress bars need no changes.
-async function runOnServer({ jobType, prompt, refUrls, options, onProgress, onPartialResults, isCancelled }) {
-  const { handles } = await startGeneration({ jobType, character: {}, refUrls, prompt, options })
+async function runOnServer({ jobType, prompt, character = {}, refUrls, options, onProgress, onPartialResults, isCancelled }) {
+  const { handles } = await startGeneration({ jobType, character, refUrls, prompt, options })
   onProgress?.(30)
 
   const jobs = await pollJobs(handles, {
@@ -116,11 +116,21 @@ async function runOnServer({ jobType, prompt, refUrls, options, onProgress, onPa
 export async function generateSingleImage(opts) {
   if (!useServer()) return hf.generateSingleImage(opts)
 
-  const { prompt, aspectRatio = '9:16', referenceImage, outfitImage, onProgress, isCancelled } = opts
+  const { prompt, aspectRatio = '9:16', referenceImage, outfitImage, onProgress, isCancelled,
+          serverJobType = null, character = null } = opts
   onProgress?.(10)
   const refUrls = await hostRefs([referenceImage, outfitImage], ['the face reference', 'the outfit reference'])
+
+  // When the caller names a server job type, the server builds the prompt from
+  // the character record and the text never leaves the browser. Callers still
+  // pass `prompt` because the Higgsfield path above needs it.
+  const onServer = !!(serverJobType && character)
+
   const urls = await runOnServer({
-    jobType: 'scene_photo', prompt, refUrls,
+    jobType: onServer ? serverJobType : 'scene_photo',
+    prompt: onServer ? null : prompt,
+    character: onServer ? character : {},
+    refUrls,
     options: { count: 1, aspectRatio, provider: 'kie' },
     onProgress, isCancelled,
   })

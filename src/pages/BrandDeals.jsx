@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { useBrandDeals, generateId } from '../store'
 import { compressImage, downloadImage } from '../utils/imageUtils'
-import { generateSingleImage } from '../utils/higgsfieldGenerate'
+import { generateSingleImage } from '../utils/generationRouter'
 import { isHFConnected } from '../utils/higgsfieldAuth'
 import { buildCharSheetPrompt, buildCharSheetPromptWithClaude } from '../utils/charSheetPrompt'
 import Lightbox from '../components/Lightbox'
