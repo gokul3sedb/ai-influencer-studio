@@ -19,11 +19,15 @@ export default function handler(req, res) {
     env: {
       KIE_API_KEY: check('KIE_API_KEY'),
       APP_ACCESS_TOKEN: check('APP_ACCESS_TOKEN'),
+      BLOB_READ_WRITE_TOKEN: check('BLOB_READ_WRITE_TOKEN'),
     },
     // Which commit is actually running — catches a redeploy that silently
     // rebuilt an older commit.
     commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || null,
     branch: process.env.VERCEL_GIT_COMMIT_REF || null,
     vercelEnv: process.env.VERCEL_ENV || null,
+    // Any BLOB_* variable at all — catches a store that was created but linked
+    // under a different variable name than the code expects.
+    blobVars: Object.keys(process.env).filter(k => k.includes('BLOB')),
   })
 }
